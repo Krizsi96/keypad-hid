@@ -2,7 +2,8 @@
 #![no_main]
 
 mod keypad;
-use core::sync::atomic::{AtomicBool, Ordering};
+mod usb_keyboard;
+
 use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
@@ -11,13 +12,11 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::usb::Driver;
 use embassy_stm32::{Config, bind_interrupts, init, peripherals, usb};
 use embassy_time::Timer;
-use embassy_usb::class::hid::{HidReaderWriter, ReportId, RequestHandler, State};
-use embassy_usb::control::OutResponse;
-use embassy_usb::{Builder, Handler};
-use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
+use usbd_hid::descriptor::{KeyboardReport};
 use {defmt_rtt as _, panic_probe as _};
 
 use crate::keypad::Keypad4x4;
+use crate::usb_keyboard::UsbKeyboard;
 
 bind_interrupts!(struct Irqs {
     OTG_FS => usb::InterruptHandler<peripherals::USB_OTG_FS>;
@@ -64,50 +63,8 @@ async fn main(_spawner: Spawner) {
         config,
     );
 
-    // Create embassy-usb config
-    let mut config = embassy_usb::Config::new(0xc0de, 0xcafe);
-    config.manufacturer = Some("Embassy");
-    config.product = Some("HID keyboard example");
-    config.serial_number = Some("12345678");
-
-    let mut config_descriptor = [0; 256];
-    let mut bos_descriptor = [0; 256];
-    let mut msos_descriptor = [0; 256];
-    let mut control_buf = [0; 64];
-
-    let mut request_handler = MyRequestHandler {};
-    let mut device_handler = MyDeviceHandler::new();
-
-    let mut state = State::new();
-
-    let mut builder = Builder::new(
-        usb_driver,
-        config,
-        &mut config_descriptor,
-        &mut bos_descriptor,
-        &mut msos_descriptor,
-        &mut control_buf,
-    );
-
-    builder.handler(&mut device_handler);
-
-    // Create classes on the builder.
-    let config = embassy_usb::class::hid::Config {
-        report_descriptor: KeyboardReport::desc(),
-        request_handler: None,
-        poll_ms: 60,
-        max_packet_size: 8,
-    };
-
-    let hid = HidReaderWriter::<_, 1, 8>::new(&mut builder, &mut state, config);
-
-    // Build the builder
-    let mut usb = builder.build();
-
-    // Run the USB device.
-    let usb_fut = usb.run();
-
-    let (reader, mut writer) = hid.split();
+    let mut usb_keyboard_config = usb_keyboard::Config::default();
+    let mut usb_keyboard = UsbKeyboard::new(&mut usb_keyboard_config, usb_driver);
 
     info!("Create keypad");
     let rows = [
@@ -137,7 +94,7 @@ async fn main(_spawner: Spawner) {
             };
 
             // Send the report
-            match writer.write_serialize(&report).await {
+            match usb_keyboard.hid_writer.write_serialize(&report).await {
                 Ok(()) => {}
                 Err(e) => warn!("Failed to send report: {:?}", e),
             };
@@ -147,10 +104,12 @@ async fn main(_spawner: Spawner) {
     };
 
     let out_fut = async {
-        reader.run(false, &mut request_handler).await;
+        usb_keyboard.hid_reader.run(false, usb_keyboard.request_handler).await;
     };
 
-    join(usb_fut, join(in_fut, out_fut)).await;
+    let usb_future = usb_keyboard.usb.run();
+
+    join(usb_future, join(in_fut, out_fut)).await;
 }
 
 fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>) -> [u8; 6] {
@@ -223,71 +182,4 @@ fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>)
     info!("keycodes: {}", keycodes);
 
     keycodes
-}
-
-struct MyRequestHandler {}
-
-impl RequestHandler for MyRequestHandler {
-    fn get_report(&mut self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
-        info!("Get report for {:?}", id);
-        None
-    }
-
-    fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
-        info!("Set report for {:?}: {=[u8]}", id, data);
-        OutResponse::Accepted
-    }
-
-    fn get_idle_ms(&mut self, id: Option<ReportId>) -> Option<u32> {
-        info!("Get idle rate for {:?}", id);
-        None
-    }
-
-    fn set_idle_ms(&mut self, id: Option<ReportId>, duration_ms: u32) {
-        info!("Set idle rate for {:?} to {:?}", id, duration_ms);
-    }
-}
-
-struct MyDeviceHandler {
-    configured: AtomicBool,
-}
-
-impl MyDeviceHandler {
-    fn new() -> Self {
-        Self {
-            configured: AtomicBool::new(false),
-        }
-    }
-}
-
-impl Handler for MyDeviceHandler {
-    fn enabled(&mut self, _enabled: bool) {
-        self.configured.store(false, Ordering::Relaxed);
-        if _enabled {
-            info!("Device enabled");
-        } else {
-            info!("Device disabled");
-        }
-    }
-
-    fn reset(&mut self) {
-        self.configured.store(false, Ordering::Relaxed);
-        info!("Bus reset, the Vbus current limit is 100mA");
-    }
-
-    fn addressed(&mut self, _addr: u8) {
-        self.configured.store(false, Ordering::Relaxed);
-        info!("USB address set to: {}", _addr);
-    }
-
-    fn configured(&mut self, _configured: bool) {
-        self.configured.store(_configured, Ordering::Relaxed);
-        if _configured {
-            info!(
-                "Device configured, it may now draw up to the configured current limit from Vbus."
-            );
-        } else {
-            info!("Device is no longer configured, the Vbus current limit is 100mA.");
-        }
-    }
 }
