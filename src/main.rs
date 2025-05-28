@@ -12,7 +12,7 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::usb::Driver;
 use embassy_stm32::{Config, bind_interrupts, init, peripherals, usb};
 use embassy_time::Timer;
-use usbd_hid::descriptor::{KeyboardReport};
+use usbd_hid::descriptor::{KeyboardReport, KeyboardUsage};
 use {defmt_rtt as _, panic_probe as _};
 
 use crate::keypad::Keypad4x4;
@@ -142,22 +142,22 @@ fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>)
     let key_pound: bool = keypad.key_pound().into();
     let key_d: bool = keypad.key_d().into();
 
-    check_key!(key_1, 0x1E); // '1'
-    check_key!(key_2, 0x1F); // '2'
-    check_key!(key_3, 0x20); // '3'
-    check_key!(key_a, 0x04); // 'A'
-    check_key!(key_4, 0x21); // '4'
-    check_key!(key_5, 0x22); // '5'
-    check_key!(key_6, 0x23); // '6'
-    check_key!(key_b, 0x05); // 'B'
-    check_key!(key_7, 0x24); // '7'
-    check_key!(key_8, 0x25); // '8'
-    check_key!(key_9, 0x26); // '9'
-    check_key!(key_c, 0x06); // 'C'
-    check_key!(key_star, 0x55); // '*'
-    check_key!(key_0, 0x27); // '0'
-    check_key!(key_pound, 0x2D); // '-'
-    check_key!(key_d, 0x07); // 'D'
+    check_key!(key_1, KeyboardUsage::Keyboard1Exclamation as u8);
+    check_key!(key_2, KeyboardUsage::Keyboard2At as u8);
+    check_key!(key_3, KeyboardUsage::Keyboard3Hash as u8);
+    check_key!(key_a, KeyboardUsage::KeyboardAa as u8);
+    check_key!(key_4, KeyboardUsage::Keyboard4Dollar as u8);
+    check_key!(key_5, KeyboardUsage::Keyboard5Percent as u8);
+    check_key!(key_6, KeyboardUsage::Keyboard6Caret as u8);
+    check_key!(key_b, KeyboardUsage::KeyboardBb as u8);
+    check_key!(key_7, KeyboardUsage::Keyboard7Ampersand as u8);
+    check_key!(key_8, KeyboardUsage::Keyboard8Asterisk as u8);
+    check_key!(key_9, KeyboardUsage::Keyboard9OpenParens as u8);
+    check_key!(key_c, KeyboardUsage::KeyboardCc as u8);
+    check_key!(key_star, KeyboardUsage::KeypadMultiply as u8);
+    check_key!(key_0, KeyboardUsage::Keyboard0CloseParens as u8);
+    check_key!(key_pound, KeyboardUsage::KeyboardDashUnderscore as u8);
+    check_key!(key_d, KeyboardUsage::KeyboardDd as u8);
 
     info!(
         "\nkey A: {}\nkey B: {}\nkey C: {}\nkey D: {}\nkey *: {}\nkey #: {}\nkey 0: {}\nkey 1: {}\nkey 2: {}\nkey 3: {}\nkey 4: {}\nkey 5: {}\nkey 6: {}\nkey 7: {}\nkey 8: {}\nkey 9: {}",
