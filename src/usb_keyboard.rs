@@ -60,8 +60,8 @@ pub struct Config<'a> {
     hid_state: State<'a>,
 }
 
-impl Default for Config<'_> {
-    fn default() -> Self {
+impl Config<'_> {
+    pub const fn new() -> Self {
         // Create embassy-usb config
         let mut config = embassy_usb::Config::new(0xc0de, 0xcafe);
         config.manufacturer = Some("Embassy");
@@ -84,7 +84,7 @@ impl Default for Config<'_> {
 pub struct UsbKeyboardRequestHandler {}
 
 impl UsbKeyboardRequestHandler {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {}
     }
 }
@@ -115,7 +115,7 @@ struct UsbKeyboardDeviceHandler {
 }
 
 impl UsbKeyboardDeviceHandler {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             configured: AtomicBool::new(false),
         }

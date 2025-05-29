@@ -9,26 +9,32 @@ mod usb_keyboard;
 use crate::board_pinout::Board;
 use crate::keypad::Keypad4x4;
 use crate::stm32_configuration::UsbDriverConfig;
-use crate::usb_keyboard::UsbKeyboard;
+use crate::usb_keyboard::{UsbKeyboard, UsbKeyboardRequestHandler};
 use defmt::{info, warn};
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_stm32::gpio::{Input, Output};
+use embassy_stm32::peripherals::USB_OTG_FS;
 use embassy_stm32::usb::Driver;
 use embassy_stm32::{Config, init};
 use embassy_time::Timer;
+use embassy_usb::UsbDevice;
+use embassy_usb::class::hid::{HidReader, HidWriter};
+use static_cell::StaticCell;
 use stm32_configuration::UsbConfiguration;
 use usbd_hid::descriptor::{KeyboardReport, KeyboardUsage};
 use {defmt_rtt as _, panic_probe as _};
 
+static USB_DRIVER_CONFIG: StaticCell<UsbDriverConfig> = StaticCell::new();
+static USB_KEYBOARD_CONFIG: StaticCell<usb_keyboard::Config> = StaticCell::new();
+
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
+async fn main(spawner: Spawner) {
     info!("Start main");
     let peripherals = init(Config::usb_configuration());
     let board = Board::new(peripherals);
 
     info!("Create USB Driver");
-    let mut usb_driver_config = UsbDriverConfig::new();
+    let usb_driver_config = USB_DRIVER_CONFIG.init(UsbDriverConfig::new());
     let usb_driver = Driver::new_fs(
         board.usb_peripheral,
         board.usb_interrupt,
@@ -39,44 +45,60 @@ async fn main(_spawner: Spawner) {
     );
 
     info!("Create USB keyboard device");
-    let mut usb_keyboard_config = usb_keyboard::Config::default();
-    let mut usb_keyboard = UsbKeyboard::new(&mut usb_keyboard_config, usb_driver);
+    let usb_keyboard_config = USB_KEYBOARD_CONFIG.init(usb_keyboard::Config::new());
+    let usb_keyboard = UsbKeyboard::new(usb_keyboard_config, usb_driver);
 
     info!("Create keypad I/O");
-    let mut keypad = Keypad4x4::new(board.keypad_rows, board.keypad_columns);
+    let keypad = Keypad4x4::new(board.keypad_rows, board.keypad_columns);
 
-    // Report keystroke
-    let in_fut = async {
-        loop {
-            let keycodes = check_keypad_buttons(&mut keypad);
+    spawner.spawn(usb_run(usb_keyboard.usb)).unwrap();
+    spawner
+        .spawn(hid_read(
+            usb_keyboard.hid_reader,
+            usb_keyboard.request_handler,
+        ))
+        .unwrap();
+    spawner
+        .spawn(report_key_strokes(usb_keyboard.hid_writer, keypad))
+        .unwrap();
+}
 
-            let report = KeyboardReport {
-                keycodes,
-                leds: 0,
-                modifier: 0,
-                reserved: 0,
-            };
+#[embassy_executor::task]
+async fn usb_run(mut usb: UsbDevice<'static, Driver<'static, USB_OTG_FS>>) {
+    usb.run().await;
+}
 
-            // Send the report
-            match usb_keyboard.hid_writer.write_serialize(&report).await {
-                Ok(()) => {}
-                Err(e) => warn!("Failed to send report: {:?}", e),
-            };
+#[embassy_executor::task]
+async fn hid_read(
+    hid_reader: HidReader<'static, Driver<'static, USB_OTG_FS>, 1>,
+    request_handler: &'static mut UsbKeyboardRequestHandler,
+) {
+    hid_reader.run(false, request_handler).await;
+}
 
-            Timer::after_millis(100).await;
-        }
-    };
+#[embassy_executor::task]
+async fn report_key_strokes(
+    mut hid_writer: HidWriter<'static, Driver<'static, USB_OTG_FS>, 8>,
+    mut keypad: Keypad4x4<Input<'static>, Output<'static>>,
+) {
+    loop {
+        let keycodes = check_keypad_buttons(&mut keypad);
 
-    let out_fut = async {
-        usb_keyboard
-            .hid_reader
-            .run(false, usb_keyboard.request_handler)
-            .await;
-    };
+        let report = KeyboardReport {
+            keycodes,
+            leds: 0,
+            modifier: 0,
+            reserved: 0,
+        };
 
-    let usb_future = usb_keyboard.usb.run();
+        // Send the report
+        match hid_writer.write_serialize(&report).await {
+            Ok(()) => {}
+            Err(e) => warn!("Failed to send report: {:?}", e),
+        };
 
-    join(usb_future, join(in_fut, out_fut)).await;
+        Timer::after_millis(100).await;
+    }
 }
 
 fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>) -> [u8; 6] {

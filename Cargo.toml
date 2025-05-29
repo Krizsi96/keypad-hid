@@ -31,6 +31,7 @@ embassy-stm32 = { version = "0.2.0", features = ["defmt", "stm32f407vg", "memory
 embassy-usb = { version = "0.4.0", features = ["defmt"] }
 usbd-hid = { version = "0.8.2", features = ["defmt"] }
 embassy-futures = { version = "0.1.1", features = ["defmt"] }
+static_cell = "2.1.0"
 
 [profile.release]
 debug = 2
