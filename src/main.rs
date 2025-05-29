@@ -60,7 +60,7 @@ async fn main(spawner: Spawner) {
         ))
         .unwrap();
     spawner
-        .spawn(report_key_strokes(
+        .spawn(report_keystrokes(
             usb_keyboard.hid_writer,
             keypad,
             board.keypad_interrupt,
@@ -84,7 +84,7 @@ async fn hid_read(
 }
 
 #[embassy_executor::task]
-async fn report_key_strokes(
+async fn report_keystrokes(
     mut hid_writer: HidWriter<'static, Driver<'static, USB_OTG_FS>, 8>,
     mut keypad: Keypad4x4<Input<'static>, Output<'static>>,
     mut keypad_interrupt: ExtiInput<'static>,
@@ -92,7 +92,6 @@ async fn report_key_strokes(
     info!("Start 'Report Key Strokes' task");
     loop {
         keypad_interrupt.wait_for_high().await;
-
         let keycodes = check_keypad_buttons(&mut keypad);
 
         // Send the report
@@ -124,72 +123,76 @@ async fn report_key_strokes(
 }
 
 fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>) -> [u8; 6] {
-    let mut keycodes: [u8; 6] = [0; 6];
-    let mut index = 0;
+    let keys = [
+        (
+            keypad.key_1().into(),
+            KeyboardUsage::Keyboard1Exclamation as u8,
+        ),
+        (keypad.key_2().into(), KeyboardUsage::Keyboard2At as u8),
+        (keypad.key_3().into(), KeyboardUsage::Keyboard3Hash as u8),
+        (keypad.key_a().into(), KeyboardUsage::KeyboardAa as u8),
+        (keypad.key_4().into(), KeyboardUsage::Keyboard4Dollar as u8),
+        (keypad.key_5().into(), KeyboardUsage::Keyboard5Percent as u8),
+        (keypad.key_6().into(), KeyboardUsage::Keyboard6Caret as u8),
+        (keypad.key_b().into(), KeyboardUsage::KeyboardBb as u8),
+        (
+            keypad.key_7().into(),
+            KeyboardUsage::Keyboard7Ampersand as u8,
+        ),
+        (
+            keypad.key_8().into(),
+            KeyboardUsage::Keyboard8Asterisk as u8,
+        ),
+        (
+            keypad.key_9().into(),
+            KeyboardUsage::Keyboard9OpenParens as u8,
+        ),
+        (keypad.key_c().into(), KeyboardUsage::KeyboardCc as u8),
+        (
+            keypad.key_star().into(),
+            KeyboardUsage::KeypadMultiply as u8,
+        ),
+        (
+            keypad.key_0().into(),
+            KeyboardUsage::Keyboard0CloseParens as u8,
+        ),
+        (
+            keypad.key_pound().into(),
+            KeyboardUsage::KeyboardDashUnderscore as u8,
+        ),
+        (keypad.key_d().into(), KeyboardUsage::KeyboardDd as u8),
+    ];
 
-    macro_rules! check_key {
-        ($pressed:expr, $hid_code:expr) => {
-            if $pressed && index < 6 {
-                keycodes[index] = $hid_code;
-                index += 1;
-            }
-        };
+    // Fill keycodes with up to 6 pressed keys
+    let mut keycodes: [u8; 6] = [0; 6];
+    for (i, (_, code)) in keys
+        .iter()
+        .filter(|(pressed, _)| *pressed)
+        .take(6)
+        .enumerate()
+    {
+        keycodes[i] = *code;
     }
 
-    let key_1: bool = keypad.key_1().into();
-    let key_2: bool = keypad.key_2().into();
-    let key_3: bool = keypad.key_3().into();
-    let key_a: bool = keypad.key_a().into();
-    let key_4: bool = keypad.key_4().into();
-    let key_5: bool = keypad.key_5().into();
-    let key_6: bool = keypad.key_6().into();
-    let key_b: bool = keypad.key_b().into();
-    let key_7: bool = keypad.key_7().into();
-    let key_8: bool = keypad.key_8().into();
-    let key_9: bool = keypad.key_9().into();
-    let key_c: bool = keypad.key_c().into();
-    let key_star: bool = keypad.key_star().into();
-    let key_0: bool = keypad.key_0().into();
-    let key_pound: bool = keypad.key_pound().into();
-    let key_d: bool = keypad.key_d().into();
-
-    check_key!(key_1, KeyboardUsage::Keyboard1Exclamation as u8);
-    check_key!(key_2, KeyboardUsage::Keyboard2At as u8);
-    check_key!(key_3, KeyboardUsage::Keyboard3Hash as u8);
-    check_key!(key_a, KeyboardUsage::KeyboardAa as u8);
-    check_key!(key_4, KeyboardUsage::Keyboard4Dollar as u8);
-    check_key!(key_5, KeyboardUsage::Keyboard5Percent as u8);
-    check_key!(key_6, KeyboardUsage::Keyboard6Caret as u8);
-    check_key!(key_b, KeyboardUsage::KeyboardBb as u8);
-    check_key!(key_7, KeyboardUsage::Keyboard7Ampersand as u8);
-    check_key!(key_8, KeyboardUsage::Keyboard8Asterisk as u8);
-    check_key!(key_9, KeyboardUsage::Keyboard9OpenParens as u8);
-    check_key!(key_c, KeyboardUsage::KeyboardCc as u8);
-    check_key!(key_star, KeyboardUsage::KeypadMultiply as u8);
-    check_key!(key_0, KeyboardUsage::Keyboard0CloseParens as u8);
-    check_key!(key_pound, KeyboardUsage::KeyboardDashUnderscore as u8);
-    check_key!(key_d, KeyboardUsage::KeyboardDd as u8);
-
     debug!(
-        "\nkey A: {}\nkey B: {}\nkey C: {}\nkey D: {}\nkey *: {}\nkey #: {}\nkey 0: {}\nkey 1: {}\nkey 2: {}\nkey 3: {}\nkey 4: {}\nkey 5: {}\nkey 6: {}\nkey 7: {}\nkey 8: {}\nkey 9: {}",
-        key_a,
-        key_b,
-        key_c,
-        key_d,
-        key_star,
-        key_pound,
-        key_0,
-        key_1,
-        key_2,
-        key_3,
-        key_4,
-        key_5,
-        key_6,
-        key_7,
-        key_8,
-        key_9,
+        "\nkey 1: {}\nkey 2: {}\nkey 3: {}\nkey A: {}\nkey 4: {}\nkey 5: {}\nkey 6: {}\nkey B: {}\nkey 7: {}\nkey 8: {}\nkey 9: {}\nkey C: {}\nkey *: {}\nkey 0: {}\nkey #: {}\nkey D: {}",
+        keys[0].0,  // key 1
+        keys[1].0,  // key 2
+        keys[2].0,  // key 3
+        keys[3].0,  // key A
+        keys[4].0,  // key 4
+        keys[5].0,  // key 5
+        keys[6].0,  // key 6
+        keys[7].0,  // key B
+        keys[8].0,  // key 7
+        keys[9].0,  // key 8
+        keys[10].0, // key 9
+        keys[11].0, // key C
+        keys[12].0, // key *
+        keys[13].0, // key 0
+        keys[14].0, // key #
+        keys[15].0, // key D
     );
-
     debug!("keycodes: {}", keycodes);
 
     keycodes
