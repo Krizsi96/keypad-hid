@@ -10,7 +10,7 @@ use crate::board_pinout::Board;
 use crate::keypad::Keypad4x4;
 use crate::stm32_configuration::UsbDriverConfig;
 use crate::usb_keyboard::{UsbKeyboard, UsbKeyboardRequestHandler};
-use defmt::{info, warn};
+use defmt::{debug, info, warn};
 use embassy_executor::Spawner;
 use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::peripherals::USB_OTG_FS;
@@ -65,7 +65,9 @@ async fn main(spawner: Spawner) {
 
 #[embassy_executor::task]
 async fn usb_run(mut usb: UsbDevice<'static, Driver<'static, USB_OTG_FS>>) {
+    info!("Start 'USB Run' task");
     usb.run().await;
+    info!("Stop 'USB Run' task");
 }
 
 #[embassy_executor::task]
@@ -73,7 +75,9 @@ async fn hid_read(
     hid_reader: HidReader<'static, Driver<'static, USB_OTG_FS>, 1>,
     request_handler: &'static mut UsbKeyboardRequestHandler,
 ) {
+    info!("Start 'HID Read' task");
     hid_reader.run(false, request_handler).await;
+    info!("Stop 'HID Read' task");
 }
 
 #[embassy_executor::task]
@@ -81,6 +85,7 @@ async fn report_key_strokes(
     mut hid_writer: HidWriter<'static, Driver<'static, USB_OTG_FS>, 8>,
     mut keypad: Keypad4x4<Input<'static>, Output<'static>>,
 ) {
+    info!("Start 'Report Key Strokes' task");
     loop {
         let keycodes = check_keypad_buttons(&mut keypad);
 
@@ -148,7 +153,7 @@ fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>)
     check_key!(key_pound, KeyboardUsage::KeyboardDashUnderscore as u8);
     check_key!(key_d, KeyboardUsage::KeyboardDd as u8);
 
-    info!(
+    debug!(
         "\nkey A: {}\nkey B: {}\nkey C: {}\nkey D: {}\nkey *: {}\nkey #: {}\nkey 0: {}\nkey 1: {}\nkey 2: {}\nkey 3: {}\nkey 4: {}\nkey 5: {}\nkey 6: {}\nkey 7: {}\nkey 8: {}\nkey 9: {}",
         key_a,
         key_b,
@@ -168,7 +173,7 @@ fn check_keypad_buttons(keypad: &mut Keypad4x4<Input<'static>, Output<'static>>)
         key_9,
     );
 
-    info!("keycodes: {}", keycodes);
+    debug!("keycodes: {}", keycodes);
 
     keycodes
 }
