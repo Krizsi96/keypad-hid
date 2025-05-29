@@ -2,9 +2,11 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use defmt::info;
 use embassy_stm32::peripherals::USB_OTG_FS;
 use embassy_stm32::usb::Driver;
-use embassy_usb::class::hid::{HidReader, HidReaderWriter, HidWriter, ReportId, RequestHandler, State};
-use embassy_usb::{Builder, Handler, UsbDevice};
+use embassy_usb::class::hid::{
+    HidReader, HidReaderWriter, HidWriter, ReportId, RequestHandler, State,
+};
 use embassy_usb::control::OutResponse;
+use embassy_usb::{Builder, Handler, UsbDevice};
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
 pub struct UsbKeyboard<'a> {
@@ -35,7 +37,8 @@ impl<'a> UsbKeyboard<'a> {
         };
 
         let (hid_reader, hid_writer) =
-            HidReaderWriter::<_, 1, 8>::new(&mut builder, &mut config.hid_state, class_config).split();
+            HidReaderWriter::<_, 1, 8>::new(&mut builder, &mut config.hid_state, class_config)
+                .split();
 
         Self {
             usb: builder.build(),
@@ -77,7 +80,6 @@ impl Default for Config<'_> {
         }
     }
 }
-
 
 pub struct UsbKeyboardRequestHandler {}
 

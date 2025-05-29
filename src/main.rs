@@ -1,25 +1,25 @@
 #![no_std]
 #![no_main]
 
-mod keypad;
-mod usb_keyboard;
-mod stm32_configuration;
 mod board_pinout;
+mod keypad;
+mod stm32_configuration;
+mod usb_keyboard;
 
+use crate::board_pinout::Board;
+use crate::keypad::Keypad4x4;
+use crate::stm32_configuration::UsbDriverConfig;
+use crate::usb_keyboard::UsbKeyboard;
 use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::usb::Driver;
-use embassy_stm32::{init, Config};
+use embassy_stm32::{Config, init};
 use embassy_time::Timer;
+use stm32_configuration::UsbConfiguration;
 use usbd_hid::descriptor::{KeyboardReport, KeyboardUsage};
 use {defmt_rtt as _, panic_probe as _};
-use stm32_configuration::UsbConfiguration;
-use crate::board_pinout::Board;
-use crate::keypad::Keypad4x4;
-use crate::stm32_configuration::UsbDriverConfig;
-use crate::usb_keyboard::UsbKeyboard;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -68,7 +68,10 @@ async fn main(_spawner: Spawner) {
     };
 
     let out_fut = async {
-        usb_keyboard.hid_reader.run(false, usb_keyboard.request_handler).await;
+        usb_keyboard
+            .hid_reader
+            .run(false, usb_keyboard.request_handler)
+            .await;
     };
 
     let usb_future = usb_keyboard.usb.run();
