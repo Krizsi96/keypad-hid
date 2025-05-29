@@ -18,9 +18,6 @@ where
         if rows.iter_mut().any(|row| row.is_high().unwrap()) {
             panic!("Input pins should be pulled low");
         }
-        columns
-            .iter_mut()
-            .for_each(|output| output.set_low().unwrap());
         Self { rows, columns }
     }
 
@@ -90,6 +87,7 @@ where
 
     fn check_key_state(&mut self, key: Key) -> PinState {
         let key_position = key.get_indexes();
+        self.set_outputs(PinState::Low);
         self.columns
             .get_mut(key_position.column_index)
             .expect("Invalid column index")
@@ -101,12 +99,15 @@ where
             .expect("Invalid row index")
             .is_high()
             .unwrap();
-        self.columns
-            .get_mut(key_position.column_index)
-            .expect("Invalid column index")
-            .set_low()
-            .unwrap();
+        self.set_outputs(PinState::High);
         is_pressed.into()
+    }
+
+    fn set_outputs(&mut self, state: PinState) {
+        self.columns.iter_mut().for_each(|output| match state {
+            PinState::Low => output.set_low().unwrap(),
+            PinState::High => output.set_high().unwrap(),
+        });
     }
 }
 

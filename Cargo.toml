@@ -27,7 +27,7 @@ embassy-executor = { version = "0.7", features = ["arch-cortex-m", "executor-thr
 embassy-sync = { version = "0.6" }
 embassy-time = { version = "0.4", features = ["defmt", "defmt-timestamp-uptime"] }
 cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
-embassy-stm32 = { version = "0.2.0", features = ["defmt", "stm32f407vg", "memory-x", "time-driver-any"] }
+embassy-stm32 = { version = "0.2.0", features = ["defmt", "stm32f407vg", "memory-x", "exti", "time-driver-any"] }
 embassy-usb = { version = "0.4.0", features = ["defmt"] }
 usbd-hid = { version = "0.8.2", features = ["defmt"] }
 embassy-futures = { version = "0.1.1", features = ["defmt"] }

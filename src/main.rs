@@ -12,6 +12,7 @@ use crate::stm32_configuration::UsbDriverConfig;
 use crate::usb_keyboard::{UsbKeyboard, UsbKeyboardRequestHandler};
 use defmt::{debug, info, warn};
 use embassy_executor::Spawner;
+use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::peripherals::USB_OTG_FS;
 use embassy_stm32::usb::Driver;
@@ -59,7 +60,11 @@ async fn main(spawner: Spawner) {
         ))
         .unwrap();
     spawner
-        .spawn(report_key_strokes(usb_keyboard.hid_writer, keypad))
+        .spawn(report_key_strokes(
+            usb_keyboard.hid_writer,
+            keypad,
+            board.keypad_interrupt,
+        ))
         .unwrap();
 }
 
@@ -84,25 +89,39 @@ async fn hid_read(
 async fn report_key_strokes(
     mut hid_writer: HidWriter<'static, Driver<'static, USB_OTG_FS>, 8>,
     mut keypad: Keypad4x4<Input<'static>, Output<'static>>,
+    mut keypad_interrupt: ExtiInput<'static>,
 ) {
     info!("Start 'Report Key Strokes' task");
     loop {
+        keypad_interrupt.wait_for_high().await;
+
         let keycodes = check_keypad_buttons(&mut keypad);
 
+        // Send the report
         let report = KeyboardReport {
             keycodes,
             leds: 0,
             modifier: 0,
             reserved: 0,
         };
-
-        // Send the report
         match hid_writer.write_serialize(&report).await {
             Ok(()) => {}
             Err(e) => warn!("Failed to send report: {:?}", e),
         };
 
-        Timer::after_millis(100).await;
+        // Send an empty report to avoid "sticky" keys
+        let report = KeyboardReport {
+            keycodes: [0, 0, 0, 0, 0, 0],
+            leds: 0,
+            modifier: 0,
+            reserved: 0,
+        };
+        match hid_writer.write_serialize(&report).await {
+            Ok(()) => {}
+            Err(e) => warn!("Failed to send report: {:?}", e),
+        };
+
+        Timer::after_millis(150).await;
     }
 }
 
