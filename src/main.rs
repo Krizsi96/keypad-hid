@@ -72,7 +72,6 @@ async fn main(spawner: Spawner) {
 async fn usb_run(mut usb: UsbDevice<'static, Driver<'static, USB_OTG_FS>>) {
     info!("Start 'USB Run' task");
     usb.run().await;
-    info!("Stop 'USB Run' task");
 }
 
 #[embassy_executor::task]
@@ -82,7 +81,6 @@ async fn hid_read(
 ) {
     info!("Start 'HID Read' task");
     hid_reader.run(false, request_handler).await;
-    info!("Stop 'HID Read' task");
 }
 
 #[embassy_executor::task]

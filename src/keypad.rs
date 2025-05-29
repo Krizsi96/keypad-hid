@@ -14,7 +14,7 @@ where
     T: InputPin,
     U: OutputPin,
 {
-    pub fn new(mut rows: [T; 4], mut columns: [U; 4]) -> Keypad4x4<T, U> {
+    pub fn new(mut rows: [T; 4], columns: [U; 4]) -> Keypad4x4<T, U> {
         if rows.iter_mut().any(|row| row.is_high().unwrap()) {
             panic!("Input pins should be pulled low");
         }
