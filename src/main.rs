@@ -3,83 +3,47 @@
 
 mod keypad;
 mod usb_keyboard;
+mod stm32_configuration;
+mod board_pinout;
 
 use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
-use embassy_stm32::time::Hertz;
+use embassy_stm32::gpio::{Input, Output};
 use embassy_stm32::usb::Driver;
-use embassy_stm32::{Config, bind_interrupts, init, peripherals, usb};
+use embassy_stm32::{init, Config};
 use embassy_time::Timer;
 use usbd_hid::descriptor::{KeyboardReport, KeyboardUsage};
 use {defmt_rtt as _, panic_probe as _};
-
+use stm32_configuration::UsbConfiguration;
+use crate::board_pinout::Board;
 use crate::keypad::Keypad4x4;
+use crate::stm32_configuration::UsbDriverConfig;
 use crate::usb_keyboard::UsbKeyboard;
-
-bind_interrupts!(struct Irqs {
-    OTG_FS => usb::InterruptHandler<peripherals::USB_OTG_FS>;
-});
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("Start main");
-    let mut config = Config::default();
-    {
-        use embassy_stm32::rcc::*;
-        config.rcc.hse = Some(Hse {
-            freq: Hertz(8_000_000),
-            mode: HseMode::Bypass,
-        });
-        config.rcc.pll_src = PllSource::HSE;
-        config.rcc.pll = Some(Pll {
-            prediv: PllPreDiv::DIV4,
-            mul: PllMul::MUL168,
-            divp: Some(PllPDiv::DIV2), // 8 Mhz / 4 * 168 / 2 = 168Mhz
-            divq: Some(PllQDiv::DIV7), // 8 Mhz / 4 * 168 / 7 = 48 Mhz
-            divr: None,
-        });
-        config.rcc.ahb_pre = AHBPrescaler::DIV1;
-        config.rcc.apb1_pre = APBPrescaler::DIV4;
-        config.rcc.apb2_pre = APBPrescaler::DIV2;
-        config.rcc.sys = Sysclk::PLL1_P;
-        config.rcc.mux.clk48sel = mux::Clk48sel::PLL1_Q;
-    }
+    let peripherals = init(Config::usb_configuration());
+    let board = Board::new(peripherals);
 
-    let p = init(config);
-
-    // Create the driver, from HAL
-    let mut ep_out_buffer = [0u8; 256];
-    let mut config = embassy_stm32::usb::Config::default();
-    config.vbus_detection = false;
-
+    info!("Create USB Driver");
+    let mut usb_driver_config = UsbDriverConfig::new();
     let usb_driver = Driver::new_fs(
-        p.USB_OTG_FS,
-        Irqs,
-        p.PA12,
-        p.PA11,
-        &mut ep_out_buffer,
-        config,
+        board.usb_peripheral,
+        board.usb_interrupt,
+        board.usb_d_plus,
+        board.usb_d_minus,
+        &mut usb_driver_config.ep_out_buffer,
+        usb_driver_config.usb_config,
     );
 
+    info!("Create USB keyboard device");
     let mut usb_keyboard_config = usb_keyboard::Config::default();
     let mut usb_keyboard = UsbKeyboard::new(&mut usb_keyboard_config, usb_driver);
 
-    info!("Create keypad");
-    let rows = [
-        Input::new(p.PA0, Pull::Down),
-        Input::new(p.PA1, Pull::Down),
-        Input::new(p.PA2, Pull::Down),
-        Input::new(p.PA3, Pull::Down),
-    ];
-    let columns = [
-        Output::new(p.PA4, Level::Low, Speed::Low),
-        Output::new(p.PA5, Level::Low, Speed::Low),
-        Output::new(p.PC4, Level::Low, Speed::Low),
-        Output::new(p.PA7, Level::Low, Speed::Low),
-    ];
-    let mut keypad = Keypad4x4::new(rows, columns);
+    info!("Create keypad I/O");
+    let mut keypad = Keypad4x4::new(board.keypad_rows, board.keypad_columns);
 
     // Report keystroke
     let in_fut = async {
